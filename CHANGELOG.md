@@ -2,28 +2,32 @@
 
 ## Unreleased
 
-### Added (L3 + L5 bridge + skill + samples)
+### Added (L2 storage + cross-language fixtures + property tests + Pages)
 
-- `crates/fln-core::anchor` — public-anchor wire format (signed
-  `(ledger_root, entry_count, anchored_at)`), 3 unit tests.
-- `fln anchor` / `fln anchor-verify` CLI subcommands (no third-party time
-  dependency — built-in UTC ISO 8601 via Howard Hinnant's civil-from-days).
-- `python/fln-oracle/` — L3 predicate evaluator: structured predicate
-  format, in-memory + yfinance sources, 4 window kinds
-  (`any_close` / `min_close` / `max_close` / `drawdown_from_high`),
-  `fln-oracle evaluate` CLI. 7 unit tests with deterministic fixtures.
-- `theses/btc-2026-q2.*` + `theses/portfolio-drawdown.*` — sample signed
-  thesis bundles (thesis + claim + predicates) committed to the repo and
-  verified by CI on every push.
-- `skill/SKILL.md` — Claude Code skill with auto-load triggers covering the
-  full thesis → sign → ledger → evaluate → anchor pipeline.
-- `.github/workflows/ci.yml` — four-job CI (rust, python, wire-compat,
-  verify-theses) replacing the demo workflow.
+- `crates/fln-store` — SQLite-backed append-only ledger. Bundled SQLite (no
+  system dep). Root matches the in-memory `fln_core::Ledger` byte-for-byte
+  for the same input. 3 unit tests including a cross-implementation parity test.
+- `fln db-append` / `db-root` / `db-anchor` CLI subcommands operate on the
+  SQLite ledger.
+- `fln anchor-publish` renders a Pages-ready static site (verified-only
+  anchors + sortable HTML index + manifest JSON).
+- `.github/workflows/pages.yml` auto-deploys the rendered site whenever
+  `anchors/**/*.anchor.json` changes.
+- `tests/vectors/v1/` — 7 canonical theses + `manifest.json` carrying
+  `canonical_bytes_hex` and `merkle_hash_hex` for each. Consumed by both
+  `crates/fln-core/tests/vectors.rs` and `python/fln/tests/test_vectors.py`,
+  enforcing wire-compat at every CI run.
+- `crates/fln-core/tests/properties.rs` — 9 `proptest` invariants over
+  Merkle hashing, ledger root, Ed25519 roundtrip + tamper detection, causal
+  DAG cycle rejection, and Causal Decay boundedness.
 
 ### Changed
 
-- `scripts/integration-test.sh` now has 12 steps (anchor smoke + committed
-  theses verification + fln-oracle tests added).
+- Workspace now has 3 crates (`fln-core`, `fln-cli`, `fln-store`); CLI now
+  has 15 subcommands.
+- `scripts/integration-test.sh` adds 3 new steps (SQLite smoke, anchor-publish
+  smoke, property tests release run).
+- CI cross-language vector regression job.
 
 ## 0.1.0 — 2026-05-21
 
@@ -43,6 +47,7 @@ reference + MCP server + GitHub Action + JSON Schemas + IETF draft).
   crate (byte-identical canonical bytes, identical Merkle hashes, identical
   Ed25519 signatures). 19 pytest cases including schema conformance.
 - `fln-mcp` — MCP server (stdio, FastMCP) exposing 10 tools to LLM agents.
+- `fln-oracle` (added in v0.2.0 dev) — L3 predicate evaluator (yfinance).
 
 ### Standards artifacts
 
@@ -55,10 +60,12 @@ reference + MCP server + GitHub Action + JSON Schemas + IETF draft).
 
 - `action/action.yml` — GitHub Action `fln-thesis` (composite, verifies every
   `*.thesis.json` + paired `*.claim.json` in a repo).
-- `.github/workflows/fln-thesis.yml` — example workflow consuming the action.
+- `.github/workflows/ci.yml` — CI matrix (rust / python / wire-compat /
+  verify-theses).
 
 ### Integration test
 
 `scripts/integration-test.sh` exercises: workspace build, Rust tests, clippy,
 2 Rust examples, Python pytest, Rust↔Python wire-compat diff, JSON Schema
-validation, end-to-end CLI smoke, `cargo publish --dry-run`.
+validation, end-to-end CLI smoke, committed-theses verification,
+`cargo publish --dry-run`.

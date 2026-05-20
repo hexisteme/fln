@@ -33,6 +33,8 @@ jobs:
           pip install -e python/fln-oracle
           pip install pytest jsonschema referencing
       - run: pytest python/fln/tests python/fln-mcp/tests python/fln-oracle/tests -q
+      - name: Cross-language vector regression
+        run: pytest python/fln/tests/test_vectors.py -q
 
   wire-compat:
     runs-on: ubuntu-latest

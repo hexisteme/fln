@@ -1,0 +1,1 @@
+{"id":"falsifier-deadline","domain":"invest","claim":"BTC closes \u2265 150k by 2026-09-01","falsifiers":[{"condition":"BTC<80k","deadline":"2026-09-01","triggered":false}],"causal_dag":{"nodes":[],"edges":[]},"decay":{"tau_days":180.0,"alpha":0.1,"regime_shift_threshold":30.0},"weight":0.0,"created_at":null}

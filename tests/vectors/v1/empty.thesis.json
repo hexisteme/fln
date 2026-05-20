@@ -1,0 +1,1 @@
+{"id":"empty-thesis","domain":"invest","claim":"no causal nodes, no falsifiers","falsifiers":[],"causal_dag":{"nodes":[],"edges":[]},"decay":{"tau_days":180.0,"alpha":0.1,"regime_shift_threshold":30.0},"weight":0.0,"created_at":null}

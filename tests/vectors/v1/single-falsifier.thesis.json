@@ -1,0 +1,1 @@
+{"id":"single-falsifier","domain":"health","claim":"VO2max stays above 50","falsifiers":[{"condition":"VO2max < 50","deadline":null,"triggered":false}],"causal_dag":{"nodes":[],"edges":[]},"decay":{"tau_days":730.0,"alpha":0.1,"regime_shift_threshold":30.0},"weight":0.0,"created_at":null}

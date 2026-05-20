@@ -16,7 +16,8 @@ artifacts:
 fln/
 ├── crates/
 │   ├── fln-core/      — Rust library (L0): merkle, sign, ledger, causal, decay, thesis, anchor
-│   └── fln-cli/       — Rust binary `fln`: 11 subcommands incl. anchor / anchor-verify
+│   ├── fln-cli/       — Rust binary `fln`: 15 subcommands incl. anchor / db-* / anchor-publish
+│   └── fln-store/     — Rust library (L2): SQLite-backed append-only ledger
 ├── python/
 │   ├── fln/           — Python reference (wire-compatible with the Rust crate)
 │   ├── fln-mcp/       — MCP server exposing FLN primitives to LLM agents
@@ -26,6 +27,7 @@ fln/
 ├── ietf/              — IETF Independent Submission draft (v0.0)
 ├── skill/             — Claude Code skill (symlink into ~/.claude/skills/fln)
 ├── theses/            — Sample signed theses + paired predicates (CI-verified)
+├── tests/vectors/v1/  — Cross-language wire-compat fixtures + manifest
 └── scripts/
     ├── wire_compat.py     — Python mirror of crates/fln-core/examples/wire_compat.rs
     └── integration-test.sh — full Rust + Python + Schema + CLI integration test
@@ -100,15 +102,42 @@ fln-oracle evaluate --predicates theses/btc-2026-q2.predicates.json \
 # exit code 2 ⇔ at least one falsifier triggered
 ```
 
-## Quickstart (anchor)
+## Quickstart (SQLite L2 ledger)
 
 ```bash
-fln anchor --ledger ledger.json --sk alice.sk --out anchors/2026-05-21.anchor.json
-fln anchor-verify --anchor anchors/2026-05-21.anchor.json
+fln db-append --db ledger.db --thesis theses/btc-q2.thesis.json
+fln db-root   --db ledger.db
+fln db-anchor --db ledger.db --sk alice.sk --out anchors/$(date +%F).anchor.json
 ```
 
-Anchor JSONs are small, self-contained, and signed — publish them to a Pages
-site or any public Git repo for tamper-evident timeline of ledger states.
+The SQLite ledger's Merkle root matches the JSON `Ledger`'s root for the same
+input sequence (verified by `crates/fln-store/src/lib.rs` tests).
+
+## Quickstart (anchor + Pages publish)
+
+```bash
+fln anchor         --ledger ledger.json --sk alice.sk --out anchors/2026-05-21.anchor.json
+fln anchor-verify  --anchor anchors/2026-05-21.anchor.json
+fln anchor-publish --input anchors --out site --title "FLN anchors"
+```
+
+`anchor-publish` writes `site/index.html` + `site/manifest.json` + verified
+copies under `site/anchors/`. The included `.github/workflows/pages.yml`
+auto-deploys this whenever `anchors/**/*.anchor.json` changes.
+
+## Cross-language wire-compat fixtures
+
+`tests/vectors/v1/manifest.json` carries the canonical-bytes hex and the Merkle
+hash hex for seven canonical theses (empty / single falsifier / multi-falsifier /
+rich causal / utf-8 / etc.). Both `crates/fln-core/tests/vectors.rs` and
+`python/fln/tests/test_vectors.py` consume the same manifest, so any drift
+between the implementations breaks CI.
+
+Regenerate fixtures (after intentional wire changes):
+
+```bash
+python3 scripts/generate-vectors.py
+```
 
 ## Quickstart (Claude Code skill)
 

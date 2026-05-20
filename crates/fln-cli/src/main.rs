@@ -4,6 +4,7 @@ use fln_core::{
     Anchor, CausalDecayParams, CausalEdge, CausalNode, Domain, EdgeKind, KeyPair, Ledger,
     MerkleNode, NodeKind, SignedClaim, Thesis, causal_decay_weight,
 };
+use fln_store::SqliteLedger;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -88,6 +89,29 @@ enum Cmd {
         #[arg(long)]
         thesis: PathBuf,
     },
+    /// Append a thesis to a SQLite-backed ledger (creates DB if missing).
+    DbAppend {
+        #[arg(long)]
+        db: PathBuf,
+        #[arg(long)]
+        thesis: PathBuf,
+    },
+    /// Print Merkle root + entry count for a SQLite-backed ledger.
+    DbRoot {
+        #[arg(long)]
+        db: PathBuf,
+    },
+    /// Sign and emit an Anchor over the current SQLite-backed ledger state.
+    DbAnchor {
+        #[arg(long)]
+        db: PathBuf,
+        #[arg(long)]
+        sk: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        anchored_at: Option<String>,
+    },
     /// Sign the current ledger root + count + timestamp, output a public anchor JSON.
     Anchor {
         #[arg(long)]
@@ -104,6 +128,18 @@ enum Cmd {
     AnchorVerify {
         #[arg(long)]
         anchor: PathBuf,
+    },
+    /// Publish anchor JSONs as a static GitHub-Pages-ready site.
+    AnchorPublish {
+        /// Directory of input *.anchor.json files (recurses 1 level deep).
+        #[arg(long)]
+        input: PathBuf,
+        /// Output directory; will be created. Contains index.html + manifest.json + verified anchors.
+        #[arg(long)]
+        out: PathBuf,
+        /// Site title shown in the rendered index page.
+        #[arg(long, default_value = "FLN public anchors")]
+        title: String,
     },
     /// Update the thesis weight given a falsifier outcome and regime signal.
     DecayUpdate {
@@ -195,6 +231,152 @@ fn now_iso8601() -> String {
         .unwrap_or(0);
     let (year, month, day, hour, min, sec) = unix_to_utc(secs);
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{min:02}:{sec:02}Z")
+}
+
+#[derive(serde::Serialize)]
+struct PublishedAnchor {
+    name: String,
+    ledger_root: String,
+    entry_count: u64,
+    anchored_at: String,
+    signer: String,
+    file: String,
+}
+
+fn anchor_publish(input: &Path, out: &Path, title: &str) -> Result<()> {
+    fs::create_dir_all(out)?;
+    let anchors_dir = out.join("anchors");
+    fs::create_dir_all(&anchors_dir)?;
+
+    let mut published: Vec<PublishedAnchor> = Vec::new();
+    let mut bad = 0usize;
+
+    let walk = walk_anchor_files(input)?;
+    for entry in walk {
+        let bytes = fs::read(&entry)?;
+        let anchor: Anchor = match serde_json::from_slice(&bytes) {
+            Ok(a) => a,
+            Err(_) => {
+                bad += 1;
+                continue;
+            }
+        };
+        if !anchor.verify() {
+            bad += 1;
+            continue;
+        }
+        let name = entry
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.trim_end_matches(".json").trim_end_matches(".anchor").to_string())
+            .unwrap_or_else(|| "anchor".into());
+        let copy_name = format!("{name}.anchor.json");
+        fs::write(anchors_dir.join(&copy_name), &bytes)?;
+
+        published.push(PublishedAnchor {
+            name,
+            ledger_root: hex::encode(anchor.ledger_root),
+            entry_count: anchor.entry_count,
+            anchored_at: anchor.anchored_at,
+            signer: hex::encode(anchor.signer),
+            file: format!("anchors/{copy_name}"),
+        });
+    }
+
+    published.sort_by(|a, b| a.anchored_at.cmp(&b.anchored_at));
+
+    let manifest = serde_json::json!({
+        "version": 1,
+        "title": title,
+        "generated_at": now_iso8601(),
+        "anchors": &published,
+    });
+    fs::write(out.join("manifest.json"), serde_json::to_vec_pretty(&manifest)?)?;
+
+    let mut rows = String::new();
+    for a in &published {
+        rows.push_str(&format!(
+            "<tr><td><a href=\"{file}\"><code>{name}</code></a></td>\
+             <td><code>{root_short}…</code></td>\
+             <td>{count}</td>\
+             <td>{ts}</td>\
+             <td><code>{signer_short}…</code></td></tr>\n",
+            file = a.file,
+            name = html_escape(&a.name),
+            root_short = &a.ledger_root[..16],
+            count = a.entry_count,
+            ts = html_escape(&a.anchored_at),
+            signer_short = &a.signer[..16],
+        ));
+    }
+    let html = format!(
+        "<!doctype html>\n<html lang=\"en\"><head>\n\
+         <meta charset=\"utf-8\">\n\
+         <title>{title}</title>\n\
+         <style>\n\
+         body{{font:14px/1.5 system-ui;max-width:960px;margin:2rem auto;padding:0 1rem;color:#111}}\n\
+         h1{{font-size:1.4rem;margin:0 0 .5rem}}\n\
+         table{{width:100%;border-collapse:collapse;margin-top:1rem}}\n\
+         th,td{{padding:.4rem .6rem;border-bottom:1px solid #ddd;text-align:left}}\n\
+         code{{font:13px ui-monospace,Menlo,monospace}}\n\
+         small{{color:#666}}\n\
+         </style></head><body>\n\
+         <h1>{title}</h1>\n\
+         <p><small>FLN ledger anchors — each row is an Ed25519-signed record of a Merkle root.</small></p>\n\
+         <table>\n\
+         <thead><tr><th>name</th><th>ledger root</th><th>count</th><th>anchored_at</th><th>signer</th></tr></thead>\n\
+         <tbody>\n{rows}</tbody>\n\
+         </table>\n\
+         <p><small>{n} anchors · skipped invalid: {bad}</small></p>\n\
+         </body></html>\n",
+        title = html_escape(title),
+        rows = rows,
+        n = published.len(),
+        bad = bad,
+    );
+    fs::write(out.join("index.html"), html)?;
+
+    println!(
+        "published {} anchors ({} skipped) → {}",
+        published.len(),
+        bad,
+        out.display()
+    );
+    Ok(())
+}
+
+fn walk_anchor_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    if !dir.exists() {
+        return Ok(out);
+    }
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let p = entry.path();
+        if p.is_dir() {
+            for sub in fs::read_dir(&p)? {
+                let sub = sub?.path();
+                if is_anchor_file(&sub) {
+                    out.push(sub);
+                }
+            }
+        } else if is_anchor_file(&p) {
+            out.push(p);
+        }
+    }
+    Ok(out)
+}
+
+fn is_anchor_file(p: &Path) -> bool {
+    p.is_file()
+        && p.file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.ends_with(".anchor.json") || s.ends_with(".json"))
+            .unwrap_or(false)
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 /// Minimal UNIX-seconds → (Y, M, D, h, m, s) conversion, no chrono dep.
@@ -298,6 +480,40 @@ fn main() -> Result<()> {
                 println!("{id}");
             }
         }
+        Cmd::DbAppend { db, thesis } => {
+            let t: Thesis = read_json(&thesis)?;
+            let mut l = SqliteLedger::open(&db)?;
+            let h = l.append(&t.to_merkle_node(vec![])?)?;
+            let root = l.root()?.context("root after append")?;
+            println!("entry  {}", hex::encode(h));
+            println!("root   {}", hex::encode(root));
+        }
+        Cmd::DbRoot { db } => {
+            let l = SqliteLedger::open(&db)?;
+            match l.root()? {
+                Some(root) => {
+                    println!("root   {}", hex::encode(root));
+                    println!("count  {}", l.len()?);
+                    println!("intact {}", l.verify_integrity()?);
+                }
+                None => println!("(empty ledger)"),
+            }
+        }
+        Cmd::DbAnchor { db, sk, out, anchored_at } => {
+            let l = SqliteLedger::open(&db)?;
+            let root = l.root()?.context("cannot anchor an empty ledger")?;
+            let count = l.len()? as u64;
+            let sk_hex = fs::read_to_string(&sk)?;
+            let sk_bytes: [u8; 32] = hex::decode(sk_hex.trim())?
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("secret key must be 32 bytes"))?;
+            let kp = KeyPair::from_bytes(&sk_bytes);
+            let timestamp = anchored_at.unwrap_or_else(now_iso8601);
+            let anchor = Anchor::new(&kp, root, count, timestamp)?;
+            write_json(&out, &anchor)?;
+            println!("anchored root  {} count={}", hex::encode(root), count);
+            println!("wrote {}", out.display());
+        }
         Cmd::Anchor { ledger, sk, out, anchored_at } => {
             let mut l: Ledger = read_json(&ledger)?;
             let root = l.root().context("cannot anchor an empty ledger")?;
@@ -325,6 +541,9 @@ fn main() -> Result<()> {
             } else {
                 bail!("anchor signature verification FAILED");
             }
+        }
+        Cmd::AnchorPublish { input, out, title } => {
+            anchor_publish(&input, &out, &title)?;
         }
         Cmd::DecayUpdate { thesis, delta_days, outcome, regime_signal } => {
             let mut t: Thesis = read_json(&thesis)?;
