@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fln-oracle"
+version = "0.1.0"
+description = "FLN L3 — Falsifier evaluator backed by market-data sources (yfinance, FRED)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT OR Apache-2.0" }
+authors = [{ name = "hexisteme", email = "hexisteme@gmail.com" }]
+dependencies = [
+  "fln>=0.1.0",
+  "pandas>=2.0",
+  "yfinance>=0.2",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+fln-oracle = "fln_oracle.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fln_oracle"]

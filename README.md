@@ -15,14 +15,17 @@ artifacts:
 ```
 fln/
 ├── crates/
-│   ├── fln-core/      — Rust library (L0): merkle, sign, ledger, causal, decay, thesis
-│   └── fln-cli/       — Rust binary `fln`: thesis/ledger/causal/decay subcommands
+│   ├── fln-core/      — Rust library (L0): merkle, sign, ledger, causal, decay, thesis, anchor
+│   └── fln-cli/       — Rust binary `fln`: 11 subcommands incl. anchor / anchor-verify
 ├── python/
 │   ├── fln/           — Python reference (wire-compatible with the Rust crate)
-│   └── fln-mcp/       — MCP server exposing FLN primitives to LLM agents
+│   ├── fln-mcp/       — MCP server exposing FLN primitives to LLM agents
+│   └── fln-oracle/    — L3 predicate evaluator (yfinance-backed) + `fln-oracle` CLI
 ├── action/            — GitHub Action `fln-thesis` (composite)
 ├── schema/            — JSON Schemas for thesis / falsifier / causal_dag / signed_claim
 ├── ietf/              — IETF Independent Submission draft (v0.0)
+├── skill/             — Claude Code skill (symlink into ~/.claude/skills/fln)
+├── theses/            — Sample signed theses + paired predicates (CI-verified)
 └── scripts/
     ├── wire_compat.py     — Python mirror of crates/fln-core/examples/wire_compat.rs
     └── integration-test.sh — full Rust + Python + Schema + CLI integration test
@@ -87,6 +90,35 @@ Register with Claude Code:
 // ~/.claude.json
 { "mcpServers": { "fln": { "command": "fln-mcp" } } }
 ```
+
+## Quickstart (L3 Oracle — yfinance evaluator)
+
+```bash
+pip install -e python/fln-oracle
+fln-oracle evaluate --predicates theses/btc-2026-q2.predicates.json \
+                    --out      theses/btc-2026-q2.evaluation.json
+# exit code 2 ⇔ at least one falsifier triggered
+```
+
+## Quickstart (anchor)
+
+```bash
+fln anchor --ledger ledger.json --sk alice.sk --out anchors/2026-05-21.anchor.json
+fln anchor-verify --anchor anchors/2026-05-21.anchor.json
+```
+
+Anchor JSONs are small, self-contained, and signed — publish them to a Pages
+site or any public Git repo for tamper-evident timeline of ledger states.
+
+## Quickstart (Claude Code skill)
+
+```bash
+ln -sf "$(pwd)/skill" ~/.claude/skills/fln
+```
+
+The skill auto-loads on FLN-relevant prompts (thesis / falsifier / ledger /
+anchor / 영구 의사결정 / 사후 검증 / …) and walks the user through the
+standard flow.
 
 ## Quickstart (GitHub Action)
 

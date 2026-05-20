@@ -1,0 +1,44 @@
+{
+  "id": "btc-2026-q2",
+  "domain": "invest",
+  "claim": "BTC reaches 150k within 90d if VIX < 20",
+  "falsifiers": [],
+  "causal_dag": {
+    "nodes": [
+      {
+        "id": "VIX",
+        "label": "Volatility",
+        "kind": "confounder"
+      },
+      {
+        "id": "ETF_FLOW",
+        "label": "ETF inflow",
+        "kind": "cause"
+      },
+      {
+        "id": "BTC",
+        "label": "BTC price",
+        "kind": "effect"
+      }
+    ],
+    "edges": [
+      {
+        "from": "VIX",
+        "to": "BTC",
+        "kind": "direct"
+      },
+      {
+        "from": "ETF_FLOW",
+        "to": "BTC",
+        "kind": "direct"
+      }
+    ]
+  },
+  "decay": {
+    "tau_days": 180.0,
+    "alpha": 0.1,
+    "regime_shift_threshold": 30.0
+  },
+  "weight": 0.0,
+  "created_at": null
+}

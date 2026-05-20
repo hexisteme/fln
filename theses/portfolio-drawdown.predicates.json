@@ -1,0 +1,13 @@
+{
+  "thesis_id": "portfolio-drawdown",
+  "predicates": [
+    {
+      "falsifier_idx": 0,
+      "ticker": "SPY",
+      "field": "close",
+      "op": "gt",
+      "rhs": 0.20,
+      "window": {"kind": "drawdown_from_high", "lookback_days": 30}
+    }
+  ]
+}

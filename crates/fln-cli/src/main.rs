@@ -1,8 +1,8 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use fln_core::{
-    CausalDecayParams, CausalEdge, CausalNode, Domain, EdgeKind, KeyPair, Ledger, MerkleNode,
-    NodeKind, SignedClaim, Thesis, causal_decay_weight,
+    Anchor, CausalDecayParams, CausalEdge, CausalNode, Domain, EdgeKind, KeyPair, Ledger,
+    MerkleNode, NodeKind, SignedClaim, Thesis, causal_decay_weight,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -88,6 +88,23 @@ enum Cmd {
         #[arg(long)]
         thesis: PathBuf,
     },
+    /// Sign the current ledger root + count + timestamp, output a public anchor JSON.
+    Anchor {
+        #[arg(long)]
+        ledger: PathBuf,
+        #[arg(long)]
+        sk: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        /// ISO 8601 timestamp; defaults to current UTC time.
+        #[arg(long)]
+        anchored_at: Option<String>,
+    },
+    /// Verify the signature on an anchor file.
+    AnchorVerify {
+        #[arg(long)]
+        anchor: PathBuf,
+    },
     /// Update the thesis weight given a falsifier outcome and regime signal.
     DecayUpdate {
         #[arg(long)]
@@ -171,6 +188,37 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
     Ok(())
 }
 
+fn now_iso8601() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let (year, month, day, hour, min, sec) = unix_to_utc(secs);
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{min:02}:{sec:02}Z")
+}
+
+/// Minimal UNIX-seconds → (Y, M, D, h, m, s) conversion, no chrono dep.
+fn unix_to_utc(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
+    let day = (secs / 86400) as i64;
+    let rem = secs % 86400;
+    let hour = (rem / 3600) as u32;
+    let min = ((rem % 3600) / 60) as u32;
+    let sec = (rem % 60) as u32;
+
+    // Howard Hinnant's date algorithm (civil_from_days).
+    let z = day + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = (yoe as i64) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { (mp + 3) as u32 } else { (mp - 9) as u32 };
+    let year = if m <= 2 { y + 1 } else { y } as i32;
+    (year, m, d, hour, min, sec)
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
@@ -248,6 +296,34 @@ fn main() -> Result<()> {
             let order = t.causal_dag.topological_order().context("cycle detected")?;
             for id in order {
                 println!("{id}");
+            }
+        }
+        Cmd::Anchor { ledger, sk, out, anchored_at } => {
+            let mut l: Ledger = read_json(&ledger)?;
+            let root = l.root().context("cannot anchor an empty ledger")?;
+            let count = l.len() as u64;
+            let sk_hex = fs::read_to_string(&sk)?;
+            let sk_bytes: [u8; 32] = hex::decode(sk_hex.trim())?
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("secret key must be 32 bytes"))?;
+            let kp = KeyPair::from_bytes(&sk_bytes);
+            let timestamp = anchored_at.unwrap_or_else(now_iso8601);
+            let anchor = Anchor::new(&kp, root, count, timestamp)?;
+            write_json(&out, &anchor)?;
+            println!("anchored root  {} count={}", hex::encode(root), count);
+            println!("wrote {}", out.display());
+        }
+        Cmd::AnchorVerify { anchor } => {
+            let a: Anchor = read_json(&anchor)?;
+            if a.verify() {
+                println!(
+                    "OK — anchor verified: root={} count={} at={}",
+                    hex::encode(a.ledger_root),
+                    a.entry_count,
+                    a.anchored_at
+                );
+            } else {
+                bail!("anchor signature verification FAILED");
             }
         }
         Cmd::DecayUpdate { thesis, delta_days, outcome, regime_signal } => {

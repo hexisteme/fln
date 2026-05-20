@@ -31,8 +31,8 @@ python3 scripts/wire_compat.py | tee /tmp/fln-py-wire.log
 step "7. Diff Rust vs Python canonical bytes"
 diff /tmp/fln-rust-wire.log /tmp/fln-py-wire.log && green "wire-compat OK"
 
-step "8. Python tests (fln + fln-mcp)"
-python3 -m pytest python/fln/tests python/fln-mcp/tests -q
+step "8. Python tests (fln + fln-mcp + fln-oracle)"
+python3 -m pytest python/fln/tests python/fln-mcp/tests python/fln-oracle/tests -q
 
 step "9. JSON Schema validation"
 python3 -c "
@@ -58,10 +58,20 @@ BIN="$ROOT/target/release/fln"
   "$BIN" thesis-verify --claim claim.json &&
   "$BIN" ledger-append --ledger l.json --thesis t.json &&
   "$BIN" ledger-root --ledger l.json &&
+  "$BIN" anchor --ledger l.json --sk alice.sk --out anchor.json &&
+  "$BIN" anchor-verify --anchor anchor.json &&
   "$BIN" decay-update --thesis t.json --delta-days 30 --outcome 0.5 --regime-signal 15)
 rm -rf "$TMP"
 
-step "11. cargo publish --dry-run (fln-core)"
+step "11. Verify committed sample theses"
+for t in theses/*.thesis.json; do
+  claim="${t%.thesis.json}.claim.json"
+  "$ROOT/target/release/fln" thesis-verify --claim "$claim"
+  "$ROOT/target/release/fln" causal-topo --thesis "$t" > /dev/null
+done
+green "sample theses OK"
+
+step "12. cargo publish --dry-run (fln-core)"
 cargo publish --dry-run -p fln-core --allow-dirty | tail -5
 
 green "

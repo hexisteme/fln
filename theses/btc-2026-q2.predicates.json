@@ -1,0 +1,13 @@
+{
+  "thesis_id": "btc-2026-q2",
+  "predicates": [
+    {
+      "falsifier_idx": 0,
+      "ticker": "BTC-USD",
+      "field": "close",
+      "op": "lt",
+      "rhs": 80000,
+      "window": {"kind": "any_close", "lookback_days": 90}
+    }
+  ]
+}

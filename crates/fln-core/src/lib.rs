@@ -26,6 +26,7 @@
 //! assert!(ledger.root().is_some());
 //! ```
 
+pub mod anchor;
 pub mod causal;
 pub mod decay;
 pub mod ledger;
@@ -33,6 +34,7 @@ pub mod merkle;
 pub mod sign;
 pub mod thesis;
 
+pub use anchor::{Anchor, AnchorPayload};
 pub use causal::{CausalDAG, CausalEdge, CausalError, CausalNode, EdgeKind, NodeKind};
 pub use decay::{CausalDecayParams, causal_decay_weight};
 pub use ledger::Ledger;

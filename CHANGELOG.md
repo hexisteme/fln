@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added (L3 + L5 bridge + skill + samples)
+
+- `crates/fln-core::anchor` — public-anchor wire format (signed
+  `(ledger_root, entry_count, anchored_at)`), 3 unit tests.
+- `fln anchor` / `fln anchor-verify` CLI subcommands (no third-party time
+  dependency — built-in UTC ISO 8601 via Howard Hinnant's civil-from-days).
+- `python/fln-oracle/` — L3 predicate evaluator: structured predicate
+  format, in-memory + yfinance sources, 4 window kinds
+  (`any_close` / `min_close` / `max_close` / `drawdown_from_high`),
+  `fln-oracle evaluate` CLI. 7 unit tests with deterministic fixtures.
+- `theses/btc-2026-q2.*` + `theses/portfolio-drawdown.*` — sample signed
+  thesis bundles (thesis + claim + predicates) committed to the repo and
+  verified by CI on every push.
+- `skill/SKILL.md` — Claude Code skill with auto-load triggers covering the
+  full thesis → sign → ledger → evaluate → anchor pipeline.
+- `.github/workflows/ci.yml` — four-job CI (rust, python, wire-compat,
+  verify-theses) replacing the demo workflow.
+
+### Changed
+
+- `scripts/integration-test.sh` now has 12 steps (anchor smoke + committed
+  theses verification + fln-oracle tests added).
+
 ## 0.1.0 — 2026-05-21
 
 Initial release covering FLN v2.1 Phase A (Rust L0) + Phase B (CLI + Python

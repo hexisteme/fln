@@ -1,0 +1,34 @@
+{
+  "id": "portfolio-drawdown",
+  "domain": "invest",
+  "claim": "SPY max drawdown stays below 20% in next 30 days",
+  "falsifiers": [],
+  "causal_dag": {
+    "nodes": [
+      {
+        "id": "MACRO",
+        "label": "Macro regime",
+        "kind": "cause"
+      },
+      {
+        "id": "SPY",
+        "label": "SPY drawdown",
+        "kind": "effect"
+      }
+    ],
+    "edges": [
+      {
+        "from": "MACRO",
+        "to": "SPY",
+        "kind": "direct"
+      }
+    ]
+  },
+  "decay": {
+    "tau_days": 180.0,
+    "alpha": 0.1,
+    "regime_shift_threshold": 30.0
+  },
+  "weight": 0.0,
+  "created_at": null
+}
