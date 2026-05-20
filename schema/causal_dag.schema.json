@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fln.dev/schema/causal_dag-0.1.0.json",
+  "title": "CausalDAG",
+  "description": "Pearl-style causal DAG: typed nodes + typed directed edges. MUST be acyclic.",
+  "type": "object",
+  "required": ["nodes", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9_][A-Za-z0-9_\\-]{0,63}$" },
+          "label": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "kind": {
+            "type": "string",
+            "enum": ["cause", "effect", "confounder", "mediator"]
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["direct", "confounded", "backdoor"]
+          }
+        }
+      }
+    }
+  }
+}

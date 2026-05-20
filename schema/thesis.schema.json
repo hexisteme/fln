@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fln.dev/schema/thesis-0.1.0.json",
+  "title": "Thesis",
+  "description": "A Falsifier-Ledger-Network thesis: claim + Popper falsifiers + Pearl causal DAG + Bayesian causal-decay weight.",
+  "type": "object",
+  "required": ["id", "domain", "claim", "falsifiers", "causal_dag", "decay", "weight"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9\\-_]{0,127}$",
+      "description": "Stable identifier, kebab-or-snake case, ≤128 chars."
+    },
+    "domain": {
+      "type": "string",
+      "enum": ["invest", "health", "real_estate", "policy", "science", "engineering"]
+    },
+    "claim": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "falsifiers": {
+      "type": "array",
+      "items": { "$ref": "falsifier.schema.json" }
+    },
+    "causal_dag": { "$ref": "causal_dag.schema.json" },
+    "decay": {
+      "type": "object",
+      "required": ["tau_days", "alpha", "regime_shift_threshold"],
+      "additionalProperties": false,
+      "properties": {
+        "tau_days": { "type": "number", "exclusiveMinimum": 0 },
+        "alpha": { "type": "number", "minimum": 0, "maximum": 1 },
+        "regime_shift_threshold": { "type": "number" }
+      }
+    },
+    "weight": { "type": "number", "minimum": -1, "maximum": 1 },
+    "created_at": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

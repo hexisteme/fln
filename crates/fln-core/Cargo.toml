@@ -1,0 +1,22 @@
+[package]
+name = "fln-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Falsifier Ledger Network — Merkle DAG + Ed25519 signing + Causal Decay weighting"
+readme = "README.md"
+keywords = ["falsifier", "merkle", "ed25519", "causal", "ledger"]
+categories = ["data-structures", "cryptography"]
+
+[dependencies]
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+sha2 = "0.10"
+serde = { workspace = true }
+serde_json = { workspace = true }
+rand = "0.8"
+thiserror = "1.0"
+
+[dev-dependencies]
+hex = "0.4"

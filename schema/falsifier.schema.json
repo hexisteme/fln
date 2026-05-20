@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fln.dev/schema/falsifier-0.1.0.json",
+  "title": "Falsifier",
+  "description": "A machine-checkable condition whose firing invalidates the parent thesis.",
+  "type": "object",
+  "required": ["condition", "triggered"],
+  "additionalProperties": false,
+  "properties": {
+    "condition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "Human + machine-readable predicate, e.g. 'BTC/USD < 80000 at any 1D close'."
+    },
+    "deadline": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Optional time-based falsifier (ISO 8601 date)."
+    },
+    "triggered": {
+      "type": "boolean",
+      "description": "Set to true once the condition has been observed to hold."
+    }
+  }
+}

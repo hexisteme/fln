@@ -1,0 +1,74 @@
+name: "fln-thesis"
+description: "Verify every Falsifier-Ledger-Network thesis file in the repo (signature + canonical bytes + DAG sanity)."
+author: "hexisteme"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  thesis_dir:
+    description: "Directory containing *.thesis.json files."
+    required: false
+    default: "theses"
+  fail_on_unsigned:
+    description: "If true, missing matching *.claim.json next to a thesis fails the job."
+    required: false
+    default: "true"
+  fln_version:
+    description: "fln-cli crate version to install (cargo install)."
+    required: false
+    default: "0.1.0"
+
+outputs:
+  verified_count:
+    description: "Number of theses successfully verified."
+    value: ${{ steps.verify.outputs.verified_count }}
+  failed_count:
+    description: "Number of theses that failed verification."
+    value: ${{ steps.verify.outputs.failed_count }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install fln-cli
+      shell: bash
+      run: cargo install fln-cli --version "${{ inputs.fln_version }}" --locked
+
+    - name: Verify theses
+      id: verify
+      shell: bash
+      env:
+        THESIS_DIR: ${{ inputs.thesis_dir }}
+        FAIL_ON_UNSIGNED: ${{ inputs.fail_on_unsigned }}
+      run: |
+        set -euo pipefail
+        verified=0
+        failed=0
+        if [ ! -d "$THESIS_DIR" ]; then
+          echo "no thesis directory at $THESIS_DIR — skipping"
+        else
+          while IFS= read -r t; do
+            claim="${t%.thesis.json}.claim.json"
+            if [ -f "$claim" ]; then
+              if fln thesis-verify --claim "$claim"; then
+                verified=$((verified+1))
+                fln causal-topo --thesis "$t" > /dev/null
+              else
+                failed=$((failed+1))
+              fi
+            elif [ "$FAIL_ON_UNSIGNED" = "true" ]; then
+              echo "::error file=$t::missing claim file $claim"
+              failed=$((failed+1))
+            fi
+          done < <(find "$THESIS_DIR" -name '*.thesis.json' -type f)
+        fi
+        echo "verified_count=$verified" >> "$GITHUB_OUTPUT"
+        echo "failed_count=$failed"   >> "$GITHUB_OUTPUT"
+        if [ "$failed" -gt 0 ]; then
+          echo "::error::$failed thesis verifications failed"
+          exit 1
+        fi
+        echo "$verified theses verified"

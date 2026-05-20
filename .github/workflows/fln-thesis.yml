@@ -1,0 +1,20 @@
+name: fln-thesis verify
+
+on:
+  pull_request:
+    paths:
+      - "theses/**"
+  push:
+    branches: [main]
+    paths:
+      - "theses/**"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./action
+        with:
+          thesis_dir: theses
+          fail_on_unsigned: "true"
