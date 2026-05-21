@@ -6,6 +6,9 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 description = "Falsifier Ledger Network — command-line interface"
+readme = "README.md"
+keywords = ["falsifier", "merkle", "ed25519", "causal", "ledger"]
+categories = ["command-line-utilities", "cryptography"]
 
 [[bin]]
 name = "fln"

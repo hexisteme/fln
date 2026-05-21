@@ -9,6 +9,10 @@ description = "Falsifier Ledger Network — Merkle DAG + Ed25519 signing + Causa
 readme = "README.md"
 keywords = ["falsifier", "merkle", "ed25519", "causal", "ledger"]
 categories = ["data-structures", "cryptography"]
+# These tests reference workspace-level fixtures and only work in the
+# repo layout. Exclude from the published crate so `cargo install` + `cargo
+# test` works for downstream consumers.
+exclude = ["tests/vectors.rs", "tests/topo_vectors.rs"]
 
 [dependencies]
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
