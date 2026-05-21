@@ -111,6 +111,9 @@ enum Cmd {
         out: PathBuf,
         #[arg(long)]
         anchored_at: Option<String>,
+        /// Optional path to the previous anchor for chain integrity.
+        #[arg(long)]
+        chain_from: Option<PathBuf>,
     },
     /// Sign the current ledger root + count + timestamp, output a public anchor JSON.
     Anchor {
@@ -123,6 +126,9 @@ enum Cmd {
         /// ISO 8601 timestamp; defaults to current UTC time.
         #[arg(long)]
         anchored_at: Option<String>,
+        /// Optional path to the previous anchor for chain integrity.
+        #[arg(long)]
+        chain_from: Option<PathBuf>,
     },
     /// Verify the signature on an anchor file.
     AnchorVerify {
@@ -211,6 +217,15 @@ impl From<EdgeKindArg> for EdgeKind {
             EdgeKindArg::Backdoor => EdgeKind::Backdoor,
         }
     }
+}
+
+fn load_prev_anchor_hash(path: Option<&Path>) -> Result<Option<fln_core::Hash>> {
+    let Some(p) = path else { return Ok(None) };
+    let prev: Anchor = read_json(p)?;
+    if !prev.verify() {
+        bail!("prior anchor at {} fails signature verification", p.display());
+    }
+    Ok(Some(prev.payload_hash()?))
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
@@ -499,7 +514,7 @@ fn main() -> Result<()> {
                 None => println!("(empty ledger)"),
             }
         }
-        Cmd::DbAnchor { db, sk, out, anchored_at } => {
+        Cmd::DbAnchor { db, sk, out, anchored_at, chain_from } => {
             let l = SqliteLedger::open(&db)?;
             let root = l.root()?.context("cannot anchor an empty ledger")?;
             let count = l.len()? as u64;
@@ -509,12 +524,13 @@ fn main() -> Result<()> {
                 .map_err(|_| anyhow::anyhow!("secret key must be 32 bytes"))?;
             let kp = KeyPair::from_bytes(&sk_bytes);
             let timestamp = anchored_at.unwrap_or_else(now_iso8601);
-            let anchor = Anchor::new(&kp, root, count, timestamp)?;
+            let prev_hash = load_prev_anchor_hash(chain_from.as_deref())?;
+            let anchor = Anchor::new(&kp, root, count, timestamp, prev_hash)?;
             write_json(&out, &anchor)?;
             println!("anchored root  {} count={}", hex::encode(root), count);
             println!("wrote {}", out.display());
         }
-        Cmd::Anchor { ledger, sk, out, anchored_at } => {
+        Cmd::Anchor { ledger, sk, out, anchored_at, chain_from } => {
             let mut l: Ledger = read_json(&ledger)?;
             let root = l.root().context("cannot anchor an empty ledger")?;
             let count = l.len() as u64;
@@ -524,7 +540,8 @@ fn main() -> Result<()> {
                 .map_err(|_| anyhow::anyhow!("secret key must be 32 bytes"))?;
             let kp = KeyPair::from_bytes(&sk_bytes);
             let timestamp = anchored_at.unwrap_or_else(now_iso8601);
-            let anchor = Anchor::new(&kp, root, count, timestamp)?;
+            let prev_hash = load_prev_anchor_hash(chain_from.as_deref())?;
+            let anchor = Anchor::new(&kp, root, count, timestamp, prev_hash)?;
             write_json(&out, &anchor)?;
             println!("anchored root  {} count={}", hex::encode(root), count);
             println!("wrote {}", out.display());

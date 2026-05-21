@@ -41,5 +41,8 @@ def test_ledger_append_and_root():
     t = sample_thesis()
     h = ledger.append(t.to_merkle_node())
     assert h is not None
-    assert ledger.root() == h
+    root = ledger.root()
+    assert root is not None
+    # v0.2: root binds entry_count + tags, so root ≠ leaf hash even for n=1.
+    assert root != h
     assert ledger.verify_integrity()

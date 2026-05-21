@@ -2,13 +2,18 @@
 
 *모든 고차 의사결정에 기계 검증 가능한 falsifier 와 인과 그래프를 자동 첨부·영속·검증하는 개인 인프라.*
 
+**v0.2 (wire-breaking hardening)** — post-audit. v0.1 canonical bytes and
+Merkle roots are obsoleted; see [`CHANGELOG.md`](CHANGELOG.md).
+
 A wire-format and tooling family that binds a thesis to four machine-checkable
 artifacts:
 
 1. **Popper** — one or more falsifier conditions with optional deadlines
 2. **Pearl** — an acyclic typed causal DAG
-3. **Merkle** — append-only ledger anchoring with SHA-256
-4. **Bayesian** — Soros-reflexivity causal-decay weighting
+3. **Merkle** — append-only ledger anchoring with SHA-256 (RFC 6962 §2.1,
+   leaf count bound into root — CVE-2012-2459 immune)
+4. **Bayesian** — Soros-reflexivity causal-decay weighting with strict
+   numeric validation
 
 ## Repository layout
 
@@ -127,17 +132,38 @@ auto-deploys this whenever `anchors/**/*.anchor.json` changes.
 
 ## Cross-language wire-compat fixtures
 
-`tests/vectors/v1/manifest.json` carries the canonical-bytes hex and the Merkle
-hash hex for seven canonical theses (empty / single falsifier / multi-falsifier /
-rich causal / utf-8 / etc.). Both `crates/fln-core/tests/vectors.rs` and
-`python/fln/tests/test_vectors.py` consume the same manifest, so any drift
-between the implementations breaks CI.
+`tests/vectors/v1/manifest.json` carries the canonical-bytes hex and the
+Merkle hash hex for seven canonical theses (empty / single falsifier /
+multi-falsifier / rich causal / UTF-8 / etc.). Both
+`crates/fln-core/tests/vectors.rs` and `python/fln/tests/test_vectors.py`
+consume the same manifest, so any drift between the implementations breaks
+CI.
+
+The v0.2 test vector (the original `wire_compat` example fixture) has
+canonical-bytes SHA-256:
+
+```
+3d213e73eef55e05dc8068b0ca00b7294371a60046e88d137c31f4ceb424c290
+```
 
 Regenerate fixtures (after intentional wire changes):
 
 ```bash
 python3 scripts/generate-vectors.py
 ```
+
+## v0.2 hardening summary
+
+After a 3-family adversarial audit (gemini-3-pro-preview, gpt-oss:120b,
+self-review), five concrete protocol gaps were closed:
+
+| Gap | Fix |
+| --- | --- |
+| Bitcoin Merkle malleability (CVE-2012-2459) | Domain separation + RFC 6962 §2.1 promotion + leaf count bound into root |
+| Anchor chain forking | `prev_anchor_hash: Option<[u8;32]>` field — anchors are now chained |
+| Negative `Δt` / NaN / out-of-range outcome | `try_causal_decay_weight` strict variant + lenient clamp variant |
+| Wire forward-compat | `version: u32 = 1` first canonical field, schema constraint |
+| `NaN`/`Inf` in canonical JSON | encoders MUST reject (`allow_nan=False`) |
 
 ## Quickstart (Claude Code skill)
 

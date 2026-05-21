@@ -92,19 +92,24 @@ thesis. Canonical bytes are the UTF-8 encoding of a JSON text
 ({{RFC8259}}) produced under the following constraints:
 
 1. The thesis object's members MUST appear in the following order:
-   `id`, `domain`, `claim`, `falsifiers`, `causal_dag`, `decay`,
-   `weight`, `created_at`.
-2. Embedded objects (`falsifier`, `causal_node`, `causal_edge`,
+   `version`, `id`, `domain`, `claim`, `falsifiers`, `causal_dag`,
+   `decay`, `weight`, `created_at`.
+2. The `version` field MUST be the integer `1` for this draft.
+3. Embedded objects (`falsifier`, `causal_node`, `causal_edge`,
    `causal_decay_params`) MUST also use declaration order.
-3. JSON whitespace between tokens MUST NOT be emitted. The separators
+4. JSON whitespace between tokens MUST NOT be emitted. The separators
    `","` and `":"` MUST be used as the only structural separators.
-4. Numeric values MUST be emitted in the shortest representation that
+5. Numeric values MUST be emitted in the shortest representation that
    round-trips to the same IEEE-754 double. Implementations MAY rely on
    their language standard library if it satisfies this property
    (e.g., Rust `serde_json`, Python `json.dumps` with
    `separators=(",", ":")`).
-5. `null` is permitted only for the `created_at` field and for the
-   `deadline` field of a falsifier.
+6. `NaN`, `+Infinity`, and `-Infinity` MUST NOT appear in canonical
+   bytes. Encoders MUST reject these values (e.g., Python
+   `json.dumps(..., allow_nan=False)`).
+7. `null` is permitted only for the `created_at` field, the
+   `deadline` field of a falsifier, and the `prev_anchor_hash` field
+   of an anchor.
 
 # Falsifier
 
@@ -147,6 +152,18 @@ days, and `regime_signal` is an externally observed regime indicator
 fires, the memory term collapses to zero; this models reflexive regime
 shifts in the sense of Soros.
 
+Implementations MUST reject the following inputs to the decay update:
+
+* `Δt < 0` — backdating would invert the exponential into growth.
+* Any of `Δt`, `falsifier_outcome`, `regime_signal`, `prev_weight`,
+  `τ` being `NaN`, `+Infinity`, or `-Infinity`.
+* `falsifier_outcome` outside the closed interval `[-1, 1]`.
+* `τ ≤ 0`.
+
+A lenient variant MAY clamp invalid inputs to the nearest valid value
+instead of erring; such a variant MUST document the clamping and MUST
+NOT be used when constructing canonical bytes that will be signed.
+
 # Merkle Ledger
 
 A Merkle node is the SHA-256 ({{RFC6234}}) digest of:
@@ -158,10 +175,22 @@ be64(len(parents))   || parent_hash_1 || parent_hash_2 || ...
 
 `be64(n)` denotes the unsigned 64-bit big-endian encoding of n.
 
-The Merkle root of a non-empty ledger is computed by repeatedly hashing
-adjacent pairs of node digests; if a layer contains an odd number of
-items, the last item is duplicated. The Merkle root of an empty
-ledger is undefined.
+The Merkle root of a non-empty ledger of `N` node digests is computed
+as follows:
+
+1. Each leaf digest `H_i` is hashed under a leaf-domain tag:
+   `L_i = SHA-256(0x00 || H_i)`.
+2. Adjacent leaves are paired and hashed under an internal-node tag:
+   `N_{i,i+1} = SHA-256(0x01 || L_i || L_{i+1})`. If a layer contains
+   an odd number of items, the lone tail item MUST be promoted to the
+   next layer unchanged (RFC 6962 §2.1 style). Implementations MUST NOT
+   duplicate the lone leaf — doing so reintroduces the Bitcoin Merkle
+   malleability vulnerability (CVE-2012-2459).
+3. Step 2 repeats until a single tree-root digest `R` remains.
+4. The final ledger root binds the leaf count `N`:
+   `root = SHA-256(0xFF || be64(N) || R)`.
+
+The Merkle root of an empty ledger is undefined.
 
 # Signing
 
@@ -178,6 +207,37 @@ bytes of a thesis. The wire format is:
 
 Verifiers MUST reject a SignedClaim whose `signer` is not 32 bytes or
 whose `signature` is not 64 bytes.
+
+# Anchor
+
+A signer MAY periodically publish an Anchor — a signed summary of the
+current ledger state — to provide a tamper-evident timeline. The
+canonical AnchorPayload is:
+
+~~~
+{
+  "version":          1,
+  "ledger_root":      <32-byte array>,
+  "entry_count":      <uint64>,
+  "anchored_at":      <ISO 8601 UTC>,
+  "prev_anchor_hash": <32-byte array | null>
+}
+~~~
+
+The `prev_anchor_hash` field, when non-null, MUST equal
+`SHA-256(canonical_bytes_of(previous_anchor_payload))`. The first
+anchor in a chain MUST set `prev_anchor_hash` to `null`. This forms a
+hash chain that lets observers detect a forking signer.
+
+Wrapped on the wire as:
+
+~~~
+{
+  ...AnchorPayload fields...,
+  "signer":    <32-byte array>,
+  "signature": <64-byte array>
+}
+~~~
 
 # Security Considerations
 
@@ -202,9 +262,10 @@ This document has no IANA actions.
 # Test Vectors
 
 The following thesis MUST produce the canonical bytes whose SHA-256
-digest equals `492448b989caf456087d7ac3a24fc1aac4c543ed496525fd2111cce874b2a574`.
+digest equals `3d213e73eef55e05dc8068b0ca00b7294371a60046e88d137c31f4ceb424c290`.
 
 ~~~
+version       1
 id            "fixed-test"
 domain        "invest"
 claim         "deterministic claim"
@@ -220,3 +281,7 @@ decay         tau_days 180.0, alpha 0.1, regime_shift_threshold 30.0
 weight        0.0
 created_at    "2026-05-20T00:00:00Z"
 ~~~
+
+Seven additional cross-language vectors covering empty / single-falsifier
+/ multi-falsifier / rich-causal / UTF-8 / etc. accompany this draft in
+`tests/vectors/v1/manifest.json`.

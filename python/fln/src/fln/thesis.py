@@ -47,11 +47,15 @@ class Falsifier:
     triggered: bool = False
 
 
+WIRE_VERSION = 1
+
+
 @dataclass
 class Thesis:
     id: str
     domain: Domain
     claim: str
+    version: int = WIRE_VERSION
     falsifiers: list[Falsifier] = field(default_factory=list)
     causal_dag: CausalDAG = field(default_factory=CausalDAG)
     decay: CausalDecayParams = field(default_factory=CausalDecayParams)
@@ -68,8 +72,12 @@ class Thesis:
         )
 
     def to_canonical_dict(self) -> dict:
-        """Match the serde_json struct serialization (declaration order)."""
+        """Match the serde_json struct serialization (declaration order).
+
+        v0.2 places ``version`` as the first canonical field.
+        """
         return {
+            "version": self.version,
             "id": self.id,
             "domain": self.domain.value,
             "claim": self.claim,
@@ -97,7 +105,12 @@ class Thesis:
         }
 
     def canonical_bytes(self) -> bytes:
-        return json.dumps(self.to_canonical_dict(), separators=(",", ":")).encode("utf-8")
+        # allow_nan=False — reject NaN/Inf in canonical bytes (v0.2 hardening).
+        return json.dumps(
+            self.to_canonical_dict(),
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
 
     def to_merkle_node(self, parents: list[Hash] | None = None) -> MerkleNode:
         return MerkleNode(payload=self.canonical_bytes(), parents=list(parents or []))
@@ -110,6 +123,7 @@ __all__ = [
     "Domain",
     "Falsifier",
     "Thesis",
+    "WIRE_VERSION",
     "CausalDAG",
     "CausalEdge",
     "CausalError",

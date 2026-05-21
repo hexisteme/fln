@@ -1,8 +1,8 @@
 //! Property-based tests — proptest invariants over the core primitives.
 
 use fln_core::{
-    CausalDAG, CausalDecayParams, CausalEdge, CausalNode, EdgeKind, KeyPair, Ledger, MerkleNode,
-    NodeKind, SignedClaim, causal_decay_weight, merkle_root,
+    Anchor, CausalDAG, CausalDecayParams, CausalEdge, CausalNode, EdgeKind, KeyPair, Ledger,
+    MerkleNode, NodeKind, SignedClaim, causal_decay_weight, merkle_root, try_causal_decay_weight,
 };
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -117,6 +117,60 @@ proptest! {
         let w = causal_decay_weight(prev_weight, delta_days, 0.0, 100.0, &params);
         // outcome=0, regime above threshold → entire formula collapses to 0.
         prop_assert!(w.abs() < 1e-12);
+    }
+
+    // === v0.2 hardening invariants ===
+
+    #[test]
+    fn merkle_root_not_aliased_by_last_leaf_duplication(
+        leaves in vec(any::<[u8; 32]>(), 1..16),
+    ) {
+        // CVE-2012-2459 regression: root([..., L]) ≠ root([..., L, L]).
+        let mut dup = leaves.clone();
+        dup.push(*leaves.last().unwrap());
+        prop_assert_ne!(merkle_root(&leaves), merkle_root(&dup));
+    }
+
+    #[test]
+    fn merkle_root_count_is_bound(h in any::<[u8; 32]>()) {
+        // Same single-leaf hash, different counts → different roots.
+        prop_assert_ne!(merkle_root(&[h]), merkle_root(&[h, h]));
+    }
+
+    #[test]
+    fn try_decay_rejects_negative_delta(
+        prev in -1.0f64..=1.0,
+        delta in -1000.0f64..0.0,
+        outcome in -1.0f64..=1.0,
+    ) {
+        let params = CausalDecayParams::default();
+        prop_assert!(try_causal_decay_weight(prev, delta, outcome, 0.0, &params).is_err());
+    }
+
+    #[test]
+    fn try_decay_rejects_outcome_out_of_range(
+        prev in -1.0f64..=1.0,
+        delta in 0.0f64..=1000.0,
+        outcome in 1.0001f64..1000.0,
+    ) {
+        let params = CausalDecayParams::default();
+        prop_assert!(try_causal_decay_weight(prev, delta, outcome, 0.0, &params).is_err());
+    }
+
+    #[test]
+    fn anchor_chain_payload_hash_is_deterministic(
+        root in any::<[u8; 32]>(),
+        count in any::<u64>(),
+    ) {
+        let kp = KeyPair::generate();
+        let a = Anchor::new(&kp, root, count, "2026-05-21T00:00:00Z", None).unwrap();
+        let h1 = a.payload_hash().unwrap();
+        let h2 = a.payload_hash().unwrap();
+        prop_assert_eq!(h1, h2);
+        // Chained anchor verifies and carries the prev hash.
+        let b = Anchor::new(&kp, root, count.wrapping_add(1), "2026-05-22T00:00:00Z", Some(h1)).unwrap();
+        prop_assert!(b.verify());
+        prop_assert_eq!(b.prev_anchor_hash, Some(h1));
     }
 }
 

@@ -1,71 +1,68 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-05-21 (wire-breaking hardening)
 
-### Added (L2 storage + cross-language fixtures + property tests + Pages)
+This release responds to a 3-family adversarial audit (gemini-3-pro-preview
++ gpt-oss:120b-cloud + Claude review) that surfaced five concrete protocol
+correctness gaps. All v0.1 canonical bytes and Merkle roots are obsoleted.
 
-- `crates/fln-store` — SQLite-backed append-only ledger. Bundled SQLite (no
-  system dep). Root matches the in-memory `fln_core::Ledger` byte-for-byte
-  for the same input. 3 unit tests including a cross-implementation parity test.
-- `fln db-append` / `db-root` / `db-anchor` CLI subcommands operate on the
-  SQLite ledger.
-- `fln anchor-publish` renders a Pages-ready static site (verified-only
-  anchors + sortable HTML index + manifest JSON).
-- `.github/workflows/pages.yml` auto-deploys the rendered site whenever
-  `anchors/**/*.anchor.json` changes.
-- `tests/vectors/v1/` — 7 canonical theses + `manifest.json` carrying
-  `canonical_bytes_hex` and `merkle_hash_hex` for each. Consumed by both
-  `crates/fln-core/tests/vectors.rs` and `python/fln/tests/test_vectors.py`,
-  enforcing wire-compat at every CI run.
-- `crates/fln-core/tests/properties.rs` — 9 `proptest` invariants over
-  Merkle hashing, ledger root, Ed25519 roundtrip + tamper detection, causal
-  DAG cycle rejection, and Causal Decay boundedness.
+### Wire-breaking changes
 
-### Changed
+- **Thesis** now carries a `version: u32 = 1` field as the first canonical
+  member. Future hardenings can fail fast instead of silently producing
+  colliding bytes.
+- **`merkle_root`** rewritten (closes CVE-2012-2459 — Bitcoin Merkle
+  malleability):
+  - Domain separation: leaves are hashed under tag `0x00`, internal
+    nodes under `0x01`, the final root under `0xFF`.
+  - Lone tail items at a layer are *promoted* to the next layer
+    unchanged (RFC 6962 §2.1) instead of being duplicated.
+  - Leaf count is bound into the final root via
+    `H(0xFF || be64(count) || tree_root)`, so `[A,B,C]` and
+    `[A,B,C,C]` produce distinct roots.
+- **AnchorPayload** gains `version: u32 = 1` and
+  `prev_anchor_hash: Option<[u8; 32]>`, turning anchor publication into a
+  hash chain. Forking signers are now detectable.
+- Canonical JSON encoders **MUST** reject `NaN` / `±Infinity`
+  (Python: `json.dumps(..., allow_nan=False)`).
 
-- Workspace now has 3 crates (`fln-core`, `fln-cli`, `fln-store`); CLI now
-  has 15 subcommands.
-- `scripts/integration-test.sh` adds 3 new steps (SQLite smoke, anchor-publish
-  smoke, property tests release run).
-- CI cross-language vector regression job.
+### Runtime hardening (no wire impact)
 
-## 0.1.0 — 2026-05-21
-
-Initial release covering FLN v2.1 Phase A (Rust L0) + Phase B (CLI + Python
-reference + MCP server + GitHub Action + JSON Schemas + IETF draft).
-
-### Rust workspace (`crates/`)
-
-- `fln-core` — 6 modules: merkle, sign, ledger, causal, decay, thesis.
-  21 unit tests + 1 doctest, `cargo clippy -D warnings` clean.
-- `fln-cli` — `fln` binary with 9 subcommands (key-new, thesis-new/sign/verify,
-  ledger-append/root, causal-add-node/edge, causal-topo, decay-update).
-
-### Python (`python/`)
-
-- `fln` — pure-Python reference implementation. Wire-compatible with the Rust
-  crate (byte-identical canonical bytes, identical Merkle hashes, identical
-  Ed25519 signatures). 19 pytest cases including schema conformance.
-- `fln-mcp` — MCP server (stdio, FastMCP) exposing 10 tools to LLM agents.
-- `fln-oracle` (added in v0.2.0 dev) — L3 predicate evaluator (yfinance).
+- `try_causal_decay_weight` strict variant rejects negative `Δt`,
+  out-of-range `outcome`, `NaN`/`Inf` anywhere, non-positive `τ`.
+- `causal_decay_weight` lenient variant clamps invalid inputs to the
+  nearest sane value.
+- `fln anchor` / `fln db-anchor` gain `--chain-from <prev.anchor.json>`
+  to populate `prev_anchor_hash`.
 
 ### Standards artifacts
 
-- `schema/` — JSON Schema draft-2020-12 documents for thesis, falsifier,
-  causal_dag, signed_claim.
-- `ietf/draft-fln-falsifier-ledger-00.md` — Independent Submission draft with
-  RFC 2119 keywords, canonical-bytes rules, decay formula, and test vector.
+- `ietf/draft-fln-falsifier-ledger-00.md` rewritten to v0.2 wire spec
+  (version field, RFC 6962 Merkle rules, NaN/Inf rejection, anchor chain).
+- `schema/thesis.schema.json` constrains `version == 1`.
+- `tests/vectors/v1/manifest.json` regenerated for v0.2 layouts (new
+  `merkle_hash_hex` values; Rust + Python both verify on every CI run).
 
-### Distribution
+### Tests
 
-- `action/action.yml` — GitHub Action `fln-thesis` (composite, verifies every
-  `*.thesis.json` + paired `*.claim.json` in a repo).
-- `.github/workflows/ci.yml` — CI matrix (rust / python / wire-compat /
-  verify-theses).
+- 48 Rust unit tests (was 24) + 14 proptest invariants (was 9), including:
+  - `merkle_root_not_aliased_by_last_leaf_duplication` — CVE-2012-2459
+    regression
+  - `merkle_root_count_is_bound`
+  - `try_decay_rejects_negative_delta` / `_outcome_out_of_range`
+  - `anchor_chain_payload_hash_is_deterministic`
+- 28 Python tests (incl. updated parity with v0.2 root binding).
 
-### Integration test
+## Unreleased (0.1 dev cycle)
 
-`scripts/integration-test.sh` exercises: workspace build, Rust tests, clippy,
-2 Rust examples, Python pytest, Rust↔Python wire-compat diff, JSON Schema
-validation, end-to-end CLI smoke, committed-theses verification,
-`cargo publish --dry-run`.
+- `crates/fln-store` SQLite L2 ledger.
+- `fln db-append` / `db-root` / `db-anchor` CLI subcommands.
+- `fln anchor-publish` renders a GitHub-Pages-ready static site.
+- `.github/workflows/pages.yml` auto-deploys the rendered site.
+- `tests/vectors/v1/` cross-language fixtures + manifest.
+- 9 proptest invariants.
+
+## 0.1.0 — 2026-05-21 (initial release)
+
+L0 Rust crate (fln-core) + CLI + Python reference + MCP server +
+GitHub Action + JSON Schemas + IETF draft. 24 Rust + 19 Python tests.

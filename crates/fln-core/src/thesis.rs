@@ -42,8 +42,13 @@ pub struct Falsifier {
 }
 
 /// Thesis — FLN 의 영속 ledger entry. Pearl/Popper/Bayesian 4중 베이스.
+///
+/// v0.2 adds `version` as the first canonical field — a forward-compatibility
+/// marker so future on-wire changes can fail cleanly instead of silently
+/// producing colliding canonical bytes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Thesis {
+    pub version: u32,
     pub id: String,
     pub domain: Domain,
     pub claim: String,
@@ -57,12 +62,15 @@ pub struct Thesis {
 }
 
 impl Thesis {
+    pub const WIRE_VERSION: u32 = 1;
+
     pub fn new(id: impl Into<String>, domain: Domain, claim: impl Into<String>) -> Self {
         let decay = CausalDecayParams {
             tau_days: domain.default_tau_days(),
             ..CausalDecayParams::default()
         };
         Self {
+            version: Self::WIRE_VERSION,
             id: id.into(),
             domain,
             claim: claim.into(),
@@ -80,7 +88,10 @@ impl Thesis {
     }
 
     /// Build a [`MerkleNode`] for ledger append.
-    pub fn to_merkle_node(&self, parents: Vec<crate::merkle::Hash>) -> serde_json::Result<MerkleNode> {
+    pub fn to_merkle_node(
+        &self,
+        parents: Vec<crate::merkle::Hash>,
+    ) -> serde_json::Result<MerkleNode> {
         Ok(MerkleNode { payload: self.canonical_bytes()?, parents })
     }
 
@@ -108,13 +119,25 @@ mod tests {
             triggered: false,
         });
         t.causal_dag
-            .add_node(CausalNode { id: "VIX".into(), label: "VIX".into(), kind: NodeKind::Confounder })
+            .add_node(CausalNode {
+                id: "VIX".into(),
+                label: "VIX".into(),
+                kind: NodeKind::Confounder,
+            })
             .unwrap();
         t.causal_dag
-            .add_node(CausalNode { id: "BTC".into(), label: "BTC price".into(), kind: NodeKind::Effect })
+            .add_node(CausalNode {
+                id: "BTC".into(),
+                label: "BTC price".into(),
+                kind: NodeKind::Effect,
+            })
             .unwrap();
         t.causal_dag
-            .add_edge(CausalEdge { from: "VIX".into(), to: "BTC".into(), kind: EdgeKind::Direct })
+            .add_edge(CausalEdge {
+                from: "VIX".into(),
+                to: "BTC".into(),
+                kind: EdgeKind::Direct,
+            })
             .unwrap();
         t
     }
@@ -148,5 +171,13 @@ mod tests {
         let new_w = causal_decay_weight(t.weight, 30.0, 0.5, 10.0, &t.decay);
         t.weight = new_w;
         assert!(t.weight > 0.0);
+    }
+
+    #[test]
+    fn version_field_present_in_canonical_bytes() {
+        let t = sample_thesis();
+        let bytes = t.canonical_bytes().unwrap();
+        // version is the first field in the canonical JSON
+        assert!(bytes.starts_with(br#"{"version":1,"#), "{:?}", &bytes[..20]);
     }
 }

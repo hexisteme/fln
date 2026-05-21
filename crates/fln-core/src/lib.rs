@@ -36,7 +36,9 @@ pub mod thesis;
 
 pub use anchor::{Anchor, AnchorPayload};
 pub use causal::{CausalDAG, CausalEdge, CausalError, CausalNode, EdgeKind, NodeKind};
-pub use decay::{CausalDecayParams, causal_decay_weight};
+pub use decay::{
+    CausalDecayParams, DecayError, causal_decay_weight, try_causal_decay_weight,
+};
 pub use ledger::Ledger;
 pub use merkle::{Hash, MerkleNode, merkle_root};
 pub use sign::{KeyPair, SignedClaim};

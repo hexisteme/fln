@@ -4,9 +4,14 @@
   "title": "Thesis",
   "description": "A Falsifier-Ledger-Network thesis: claim + Popper falsifiers + Pearl causal DAG + Bayesian causal-decay weight.",
   "type": "object",
-  "required": ["id", "domain", "claim", "falsifiers", "causal_dag", "decay", "weight"],
+  "required": ["version", "id", "domain", "claim", "falsifiers", "causal_dag", "decay", "weight"],
   "additionalProperties": false,
   "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Wire-format version. v0.2 of fln-core emits 1."
+    },
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9\\-_]{0,127}$",

@@ -36,7 +36,9 @@ def test_full_pipeline(monkeypatch):
 
     appended = server.append_ledger(ledger_name="main", id="btc-q2")
     assert appended["count"] == 1
-    assert appended["root_hex"] == appended["entry_hash_hex"]
+    # v0.2: root binds entry_count + tags, so root != leaf hash even for n=1.
+    assert appended["root_hex"] != appended["entry_hash_hex"]
+    assert len(appended["root_hex"]) == 64
 
     weights = []
     weights.append(server.decay_update(id="btc-q2", delta_days=30, outcome=0.5, regime_signal=15)["weight"])
