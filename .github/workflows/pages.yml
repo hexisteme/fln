@@ -19,7 +19,6 @@ concurrency:
 
 jobs:
   publish:
-    if: hashFiles('anchors/**/*.anchor.json') != ''
     runs-on: ubuntu-latest
     environment:
       name: github-pages
