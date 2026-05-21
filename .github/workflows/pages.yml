@@ -5,7 +5,6 @@ on:
     branches: [main, master]
     paths:
       - "anchors/**"
-      - "crates/fln-cli/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 

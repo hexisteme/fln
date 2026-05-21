@@ -1,5 +1,9 @@
 # FLN — Falsifier Ledger Network
 
+[![ci](https://github.com/hexisteme/fln/actions/workflows/ci.yml/badge.svg)](https://github.com/hexisteme/fln/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![anchors](https://img.shields.io/badge/public%20anchors-hexisteme.github.io%2Ffln-orange)](https://hexisteme.github.io/fln/)
+
 *모든 고차 의사결정에 기계 검증 가능한 falsifier 와 인과 그래프를 자동 첨부·영속·검증하는 개인 인프라.*
 
 **v0.2 (wire-breaking hardening)** — post-audit. v0.1 canonical bytes and
