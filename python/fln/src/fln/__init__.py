@@ -6,6 +6,7 @@ Ed25519 signature bytes.
 """
 
 from .anchor import Anchor, AnchorPayload
+from .canonical import CanonicalError, is_strict_iso8601_utc, validate_canonical_bytes
 from .causal import CausalDAG, CausalEdge, CausalError, CausalNode, EdgeKind, NodeKind
 from .decay import (
     CausalDecayParams,
@@ -18,11 +19,14 @@ from .merkle import MerkleNode, merkle_root
 from .sign import KeyPair, SignedClaim
 from .thesis import Domain, Falsifier, Thesis
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = [
     "Anchor",
     "AnchorPayload",
+    "CanonicalError",
+    "is_strict_iso8601_utc",
+    "validate_canonical_bytes",
     "CausalDAG",
     "CausalEdge",
     "CausalError",

@@ -61,6 +61,7 @@ class Thesis:
     decay: CausalDecayParams = field(default_factory=CausalDecayParams)
     weight: float = 0.0
     created_at: str | None = None
+    nonce: str | None = None
 
     @classmethod
     def new(cls, id: str, domain: Domain, claim: str) -> "Thesis":
@@ -71,12 +72,21 @@ class Thesis:
             decay=CausalDecayParams(tau_days=domain.default_tau_days),
         )
 
+    @classmethod
+    def with_random_nonce(cls, thesis: "Thesis") -> "Thesis":
+        """Return a copy of ``thesis`` with a fresh 16-byte hex nonce attached."""
+        import os
+        thesis.nonce = os.urandom(16).hex()
+        return thesis
+
     def to_canonical_dict(self) -> dict:
         """Match the serde_json struct serialization (declaration order).
 
-        v0.2 places ``version`` as the first canonical field.
+        v0.2 places ``version`` as the first canonical field. v0.2.1 emits
+        the optional ``nonce`` field only when set, preserving byte-equal
+        canonical bytes for nonce-less theses.
         """
-        return {
+        out: dict = {
             "version": self.version,
             "id": self.id,
             "domain": self.domain.value,
@@ -103,6 +113,9 @@ class Thesis:
             "weight": self.weight,
             "created_at": self.created_at,
         }
+        if self.nonce is not None:
+            out["nonce"] = self.nonce
+        return out
 
     def canonical_bytes(self) -> bytes:
         # allow_nan=False — reject NaN/Inf in canonical bytes (v0.2 hardening).

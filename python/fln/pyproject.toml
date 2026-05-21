@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fln"
-version = "0.2.0"
+version = "0.2.1"
 description = "Falsifier Ledger Network — Python reference implementation"
 readme = "README.md"
 requires-python = ">=3.10"

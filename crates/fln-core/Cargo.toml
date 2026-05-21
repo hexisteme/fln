@@ -17,7 +17,13 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 rand = "0.8"
 thiserror = "1.0"
+unicode-normalization = "0.1"
 
 [dev-dependencies]
 hex = "0.4"
 proptest = "1.5"
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "core_bench"
+harness = false

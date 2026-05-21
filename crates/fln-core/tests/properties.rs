@@ -1,8 +1,9 @@
 //! Property-based tests — proptest invariants over the core primitives.
 
 use fln_core::{
-    Anchor, CausalDAG, CausalDecayParams, CausalEdge, CausalNode, EdgeKind, KeyPair, Ledger,
-    MerkleNode, NodeKind, SignedClaim, causal_decay_weight, merkle_root, try_causal_decay_weight,
+    Anchor, CausalDAG, CausalDecayParams, CausalEdge, CausalNode, CanonicalError, EdgeKind,
+    KeyPair, Ledger, MerkleNode, NodeKind, SignedClaim, causal_decay_weight, merkle_root,
+    try_causal_decay_weight, validate_canonical_bytes,
 };
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -155,6 +156,31 @@ proptest! {
     ) {
         let params = CausalDecayParams::default();
         prop_assert!(try_causal_decay_weight(prev, delta, outcome, 0.0, &params).is_err());
+    }
+
+    #[test]
+    fn canonical_validator_accepts_well_formed_thesis(
+        id in "[a-z0-9]{1,16}",
+        claim in "[A-Za-z0-9 ]{1,32}",
+    ) {
+        use fln_core::{Domain, Thesis};
+        let mut t = Thesis::new(id, Domain::Invest, claim);
+        t.created_at = Some("2026-05-21T00:00:00Z".into());
+        let bytes = t.canonical_bytes().unwrap();
+        prop_assert!(validate_canonical_bytes(&bytes).is_ok());
+    }
+
+    #[test]
+    fn canonical_validator_rejects_duplicate_keys(
+        a in "[a-z]{3,10}",
+        b in "[a-z]{3,10}",
+    ) {
+        // Inject a duplicate key into otherwise-valid JSON.
+        let hostile = format!(r#"{{"version":1,"id":"{a}","id":"{b}"}}"#);
+        prop_assert!(matches!(
+            validate_canonical_bytes(hostile.as_bytes()),
+            Err(CanonicalError::DuplicateKey(_))
+        ));
     }
 
     #[test]

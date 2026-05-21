@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.2.1 — 2026-05-21 (canonicalization strictness + nonce + benchmarks)
+
+A second-round audit (gemini-3-pro-preview + gpt-oss:120b-cloud, consensus)
+identified four remaining malleability vectors plus a missing performance
+baseline. All v0.2.1 changes are **wire-additive** — existing v0.2.0
+canonical bytes and Merkle hashes still verify byte-for-byte.
+
+### Added — canonical strictness
+
+- `fln_core::canonical::validate_canonical_bytes` (and Python mirror
+  `fln.validate_canonical_bytes`) — rejects:
+  - **Duplicate JSON keys** (silent malleability vector; raw stream
+    walker catches them before serde could last-wins them away).
+  - **Non-NFC strings** (e.g. `é` decomposed as `e + U+0301` vs the
+    composed `U+00E9`).
+  - **Loose ISO 8601** in any `created_at` / `anchored_at` /
+    `deadline` field — enforces `YYYY-MM-DDTHH:MM:SS(.f{1,9})?Z`.
+- `fln_core::is_strict_iso8601_utc(&str)` helper.
+
+### Added — replay protection
+
+- Wire-additive `Thesis.nonce: Option<String>` (skip-when-None so v0.2
+  canonical bytes are unaffected). New helper
+  `Thesis::with_random_nonce()` attaches a 16-byte cryptographic random
+  nonce in hex. Different nonces yield different signatures, blocking
+  ledger-wide replay attacks.
+
+### Added — cross-language topo determinism
+
+- `tests/vectors/v1/topo_order.json` carries five DAG cases (diamond,
+  tie-break, deep chain, fork-merge, disconnected) with expected Kahn
+  output. Rust (`tests/topo_vectors.rs`) and Python
+  (`test_topo_vectors.py`) both verify against the same fixture.
+
+### Added — performance baseline
+
+- `crates/fln-core/benches/core_bench.rs` (criterion). Initial Apple M4
+  numbers, `--quick`:
+
+  | benchmark | ns/iter |
+  | --- | ---: |
+  | `merkle_root(10)` | ~7,900 |
+  | `merkle_root(100)` | ~66,000 |
+  | `merkle_root(1,000)` | ~780,000 |
+  | `merkle_root(10,000)` | ~9,300,000 |
+  | `merkle_node_hash_1kib` | ~4,200 |
+  | `ed25519_sign_64b` | ~19,500 |
+  | `ed25519_verify_64b` | ~24,400 |
+  | `ledger_append(1,000)` (incl. root) | ~614,000 |
+
+### Tests
+
+- 66 Rust tests (was 53) — adds two proptest invariants over
+  `validate_canonical_bytes` and one topo-fixture test.
+- 39 Python tests (was 28) — adds 10 canonical-validator tests + topo
+  vector test.
+
 ## 0.2.0 — 2026-05-21 (wire-breaking hardening)
 
 This release responds to a 3-family adversarial audit (gemini-3-pro-preview

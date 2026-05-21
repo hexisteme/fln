@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "description": "Cross-language Kahn topological-order determinism. Tie-break: lexicographic descending (pop from sorted-ascending tail). Both Rust fln-core and Python fln must produce identical orderings.",
+  "cases": [
+    {
+      "name": "diamond",
+      "nodes": ["A", "B", "C", "D"],
+      "edges": [["A","B"],["A","C"],["B","D"],["C","D"]],
+      "expected_order": ["A","C","B","D"]
+    },
+    {
+      "name": "tie-break-lex",
+      "nodes": ["Z","Y","X","A","B","C"],
+      "edges": [],
+      "expected_order": ["Z","Y","X","C","B","A"]
+    },
+    {
+      "name": "deep-chain",
+      "nodes": ["n0","n1","n2","n3","n4","n5","n6","n7","n8","n9"],
+      "edges": [["n0","n1"],["n1","n2"],["n2","n3"],["n3","n4"],["n4","n5"],["n5","n6"],["n6","n7"],["n7","n8"],["n8","n9"]],
+      "expected_order": ["n0","n1","n2","n3","n4","n5","n6","n7","n8","n9"]
+    },
+    {
+      "name": "fork-merge",
+      "nodes": ["root","alpha","beta","gamma","sink"],
+      "edges": [["root","alpha"],["root","beta"],["root","gamma"],["alpha","sink"],["beta","sink"],["gamma","sink"]],
+      "expected_order": ["root","gamma","beta","alpha","sink"]
+    },
+    {
+      "name": "disconnected",
+      "nodes": ["x","y","p","q"],
+      "edges": [["x","y"],["p","q"]],
+      "expected_order": ["x","y","p","q"]
+    }
+  ]
+}

@@ -59,6 +59,11 @@ pub struct Thesis {
     pub weight: f64,
     /// optional ISO8601 of creation.
     pub created_at: Option<String>,
+    /// Optional anti-replay nonce (hex of ≥ 16 random bytes). Wire-additive:
+    /// theses without a nonce omit the field entirely so existing v0.2 test
+    /// vectors are byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<String>,
 }
 
 impl Thesis {
@@ -79,7 +84,21 @@ impl Thesis {
             decay,
             weight: 0.0,
             created_at: None,
+            nonce: None,
         }
+    }
+
+    /// Attach a fresh 16-byte random nonce. Idempotent on subsequent calls.
+    pub fn with_random_nonce(mut self) -> Self {
+        use rand::RngCore;
+        let mut bytes = [0u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut bytes);
+        let mut hex = String::with_capacity(32);
+        for b in bytes {
+            hex.push_str(&format!("{b:02x}"));
+        }
+        self.nonce = Some(hex);
+        self
     }
 
     /// Canonical bytes — deterministic serialization for hashing/signing.
@@ -179,5 +198,23 @@ mod tests {
         let bytes = t.canonical_bytes().unwrap();
         // version is the first field in the canonical JSON
         assert!(bytes.starts_with(br#"{"version":1,"#), "{:?}", &bytes[..20]);
+    }
+
+    #[test]
+    fn nonce_is_omitted_when_none() {
+        // Wire-additivity: theses without a nonce produce v0.2-identical bytes.
+        let t = sample_thesis();
+        let bytes = t.canonical_bytes().unwrap();
+        assert!(!bytes.windows(7).any(|w| w == b"\"nonce\""));
+    }
+
+    #[test]
+    fn nonce_is_included_when_set() {
+        let t = sample_thesis().with_random_nonce();
+        let bytes = t.canonical_bytes().unwrap();
+        assert!(bytes.windows(7).any(|w| w == b"\"nonce\""));
+        // Different random nonces yield different bytes (replay protection).
+        let other = sample_thesis().with_random_nonce();
+        assert_ne!(bytes, other.canonical_bytes().unwrap());
     }
 }
